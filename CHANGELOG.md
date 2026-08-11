@@ -14,6 +14,26 @@ not reconstructed from memory.
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-08-11
+
+A security release. `1.x` is the previous major and receives security fixes
+only; everything else lands on the current one, `2.x`.
+
+### Security
+
+- **axios upgraded from `0.26.1` to `1.19.0`.** `npm audit` reports 23
+  advisories against the `0.x` line, as one high-severity vulnerability, and
+  none of them have a fix inside `^0.26.1` — axios stopped patching `0.x`
+  altogether, so clearing them means crossing a major of the dependency.
+
+  One visible difference comes with it: `response.headers` is an
+  `AxiosHeaders` instance rather than a plain object. Reading a header by
+  name still works. `response.data`, `response.status` and every error this
+  package throws are unchanged.
+
+`2.x` has no runtime dependencies at all — it is built on `fetch` from the
+standard library — so none of this applies there. If you can move, move.
+
 ## [1.1.2] - 2026-08-10
 
 ### Changed
