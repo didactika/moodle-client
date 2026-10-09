@@ -15,7 +15,7 @@ import { URLError } from "../errors/url-error";
  * judgement about the body — which is why it lives on the response object
  * itself instead of in a free function somewhere else.
  */
-export class MoodleResponse<T = any> implements IMoodleResponse<T> {
+export class MoodleResponse<T = unknown> implements IMoodleResponse<T> {
     readonly data: T;
     readonly status: number;
     readonly statusText: string;
@@ -85,7 +85,7 @@ export class MoodleResponse<T = any> implements IMoodleResponse<T> {
                 default:
                     throw body.exception === "moodle_exception"
                         ? new MoodleException(this.status, body.message ?? "", body.debuginfo)
-                        : new BadRequestError();
+                        : new BadRequestError(body.debuginfo);
             }
         }
 

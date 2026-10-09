@@ -1,7 +1,7 @@
 {
   "name": "@didactika/moodle-client",
-  "version": "2.1.0",
-  "description": "Typed Moodle web service client with no runtime dependencies, built on native fetch",
+  "version": "2.2.0",
+  "description": "Typed Moodle web service client built on native fetch, featuring an integrated schema generator CLI",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -24,19 +24,27 @@
   "engines": {
     "node": ">=20"
   },
+  "bin": {
+    "moodle-generate-schemas": "dist/generator/cli.js",
+    "moodle-create-schemas": "dist/generator/create-cli.js",
+    "moodle-delete-schemas": "dist/generator/delete-cli.js"
+  },
   "scripts": {
     "clean": "rimraf dist",
-    "build": "tsup src/index.ts --dts --format cjs,esm --target node20",
+    "build": "tsup && node scripts/postbuild.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "moodle:generate-webservices": "tsx src/generator/cli.ts",
+    "moodle-create-schemas": "tsx src/generator/create-cli.ts",
+    "moodle-delete-schemas": "tsx src/generator/delete-cli.ts"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/didactika/moodle-client.git"
+    "url": "git+https://github.com/didactika/moodle-client.git"
   },
   "keywords": [
     "moodle",
@@ -48,15 +56,18 @@
   ],
   "author": "Didactika - Educational Technology Open Source (https://github.com/didactika)",
   "contributors": [
-    "Hector L. Arrechea <hectorlazaroarrechea@gmail.com> (https://github.com/hector-ae21)"
+    "Hector L. Arrechea <hectorlazaroarrechea@gmail.com> (https://github.com/hector-ae21)",
+    "Eduardo Cubias <eduardocubiasm@gmail.com> (https://github.com/Eduardo-Cubiasss)"
   ],
   "license": "MIT",
   "sideEffects": false,
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/tar": "^6.1.13",
     "@vitest/coverage-v8": "^4.1.0",
     "rimraf": "^6.0.0",
     "tsup": "^8.0.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
   },
@@ -66,5 +77,11 @@
   "bugs": {
     "url": "https://github.com/didactika/moodle-client/issues"
   },
-  "homepage": "https://github.com/didactika/moodle-client#readme"
+  "homepage": "https://github.com/didactika/moodle-client#readme",
+  "dependencies": {
+    "@didactika/moodle-client-schemas": "^0.2.3",
+    "p-limit": "^7.3.3",
+    "simple-git": "^4.0.2",
+    "tar": "^7.5.22"
+  }
 }

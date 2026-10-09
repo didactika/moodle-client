@@ -3,6 +3,9 @@ import { MoodleEndpoint } from "./moodle-endpoint";
 import { MoodleResponse } from "./moodle-response";
 import { RequestContent } from "./request-content";
 import { URLError } from "../errors/url-error";
+import type { GeneratedMoodleServices } from "../schemas/index";
+
+export interface MoodleClient extends GeneratedMoodleServices {}
 
 // fetch refuses to attach a body to these, and PHP would not read one into
 // $_GET anyway, so their parameters go in the query string instead.
@@ -17,6 +20,12 @@ const BODYLESS_METHODS = new Set(["GET", "HEAD"]);
  *   token: "aeb315e6dd3affc18352fe46124cdd48",
  * });
  *
+ * // Direct typed method (bundled Moodle 4.5 webservice namespace):
+ * const { data: courses } = await moodle.webservice.core_course_get_courses({
+ *   options: { ids: [1, 2, 3] },
+ * });
+ *
+ * // Or dynamic call by function name:
  * const { data } = await moodle.call("core_course_get_courses", {
  *   options: { ids: [1, 2, 3] },
  * });
@@ -28,10 +37,40 @@ const BODYLESS_METHODS = new Set(["GET", "HEAD"]);
 export class MoodleClient {
     private readonly endpoint: MoodleEndpoint;
     private readonly defaultMethod: HttpMethod;
+    private readonly namespaceProxies = new Map<string, object>();
 
     constructor(options: IMoodleClientOptions) {
         this.endpoint = new MoodleEndpoint(options.rootURL, options.token);
         this.defaultMethod = options.method ?? "POST";
+
+        return new Proxy(this, {
+            get(target, prop, receiver) {
+                if (typeof prop === "symbol" || prop in target) {
+                    return Reflect.get(target, prop, receiver);
+                }
+                if (typeof prop === "string") {
+                    let nsProxy = target.namespaceProxies.get(prop);
+                    if (!nsProxy) {
+                        nsProxy = new Proxy(
+                            {},
+                            {
+                                get(_nsTarget, wsName) {
+                                    if (typeof wsName === "string") {
+                                        return (content?: object, method?: HttpMethod) => {
+                                            return target.call(wsName, content, method);
+                                        };
+                                    }
+                                    return undefined;
+                                },
+                            }
+                        );
+                        target.namespaceProxies.set(prop, nsProxy);
+                    }
+                    return nsProxy;
+                }
+                return Reflect.get(target, prop, receiver);
+            },
+        });
     }
 
     /**
@@ -43,7 +82,7 @@ export class MoodleClient {
      * @throws {URLError} when the site cannot be reached
      * @throws {MoodleException} and friends when Moodle reports an error
      */
-    async call<T = any>(
+    async call<T = unknown>(
         webServiceFunction: string,
         content: object = {},
         method?: HttpMethod,
@@ -90,7 +129,7 @@ export class MoodleClient {
  * Reach for {@link MoodleClient} when more than one call goes to the same
  * site, so the site and token are stated once instead of per call.
  */
-export const moodleClient = <T = any>(data: IDataRequest): Promise<MoodleResponse<T>> => {
+export const moodleClient = <T = unknown>(data: IDataRequest): Promise<MoodleResponse<T>> => {
     const client = new MoodleClient({
         rootURL: data.urlRequest.rootURL,
         token: data.urlRequest.token,
