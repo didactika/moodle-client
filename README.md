@@ -1,22 +1,35 @@
 # @didactika/moodle-client
 
-Typed client for Moodle web services. It formats a plain JavaScript object
-into the shape Moodle's REST endpoint expects, sends it, and turns whatever
-error the site reports back into a real `Error` you can narrow.
+Strongly-typed TypeScript client for Moodle web services with full IDE autocompletion and zero runtime dependencies, built on native `fetch`.
 
 [![npm](https://img.shields.io/npm/v/@didactika/moodle-client)](https://www.npmjs.com/package/@didactika/moodle-client)
 [![node](https://img.shields.io/node/v/@didactika/moodle-client)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/@didactika/moodle-client)](LICENSE)
 
-No runtime dependencies: it is built on `fetch` and `URLSearchParams` from
-the Node standard library.
+---
+
+## Highlights
+
+- ⚡ **Direct Typed Methods Out of the Box**: Call 700+ Moodle web service functions directly with full autocomplete, parameter shapes, and typed responses (e.g. `client.webservice.core_course_get_courses(...)`). Pre-bundled with official Moodle 4.5 schemas by default.
+- 🔄 **Dynamic `.call()` Support**: Call any web service dynamically by string name (`client.call("core_course_get_courses", ...)`), with custom generic response typing (`client.call<T>(...)`).
+- 🧩 **Multi-Namespace Architecture**: Generate and use multiple Moodle versions (e.g. Moodle 4.4, 4.5) or local plugin codebases side-by-side on the same client instance.
+- 📦 **Automatic Parameter Serialization**: Deeply nested JavaScript objects and arrays are automatically flattened into the `parent[child][index]` format Moodle's REST endpoint requires.
+- 🛡️ **Semantic Error Handling**: Converts Moodle's JSON body errors (which return HTTP 200 OK) into strongly-typed Error classes (`InvalidToken`, `AccessException`, `InvalidParameter`, `InvalidRecord`, `MoodleException`, etc.).
+- 🪶 **Zero Runtime Dependencies**: Built entirely on native Node standard library (`fetch`, `URLSearchParams`). Ships dual CommonJS, ESM, and TypeScript declarations.
+
+---
 
 ## Requirements
 
-Node 20 or newer, and a Moodle site with web services and the REST protocol
-enabled, plus a token for the functions you intend to call.
-[docs/getting-started.md](docs/getting-started.md) walks through setting
-that up.
+- **Node.js**: 20 or newer.
+- **Moodle site**: A Moodle instance with web services and REST protocol enabled, plus a token:
+  1. **Web services enabled**: *Site administration -> General -> Advanced features -> Enable web services*.
+  2. **REST protocol enabled**: *Site administration -> Server -> Web services -> Manage protocols*, and switch on *REST protocol*.
+  3. **Authorized token**: *Site administration -> Server -> Web services -> External services* (add functions) and *Manage tokens* (issue token for a user).
+
+See [docs/getting-started.md](docs/getting-started.md) for a detailed walkthrough.
+
+---
 
 ## Installation
 
@@ -24,13 +37,13 @@ that up.
 npm install @didactika/moodle-client
 ```
 
-Ships CommonJS, ESM and type declarations, so `require` and `import` both
-work without any configuration.
+> **Note**: Previously published as `moodle-web-service-client`. That package is deprecated on npm and points here.
 
-> Previously published as `moodle-web-service-client`. That package is
-> deprecated on npm and points here.
+---
 
-## Usage
+## Quick Start
+
+### 1. Initialize the client
 
 ```ts
 import { MoodleClient } from "@didactika/moodle-client";
@@ -39,24 +52,99 @@ const moodle = new MoodleClient({
   rootURL: "https://moodle.example.org",
   token: process.env.MOODLE_TOKEN!,
 });
+```
 
-const { data } = await moodle.call("core_course_get_courses", {
-  options: { ids: [1, 2, 3] },
+### 2. Make your first call with direct typed methods
+
+Out of the box, `moodle.webservice` gives you immediate, strongly-typed access to all standard Moodle 4.5 web services:
+
+```ts
+// Autocomplete on parameters and return types out of the box:
+const { data: site } = await moodle.webservice.core_webservice_get_site_info();
+
+console.log(`Connected to ${site.sitename} as ${site.fullname} (${site.username})`);
+console.log(`Moodle Release: ${site.release}`);
+```
+
+### 3. Call functions with parameters
+
+Nested parameters are validated by TypeScript at compile-time and automatically serialized for Moodle at runtime:
+
+```ts
+const { data: courses } = await moodle.webservice.core_course_get_courses({
+  options: {
+    ids: [1, 2, 3],
+  },
+});
+
+courses.forEach((course) => {
+  console.log(`[${course.id}] ${course.shortname} - ${course.fullname}`);
 });
 ```
 
-Build the client once and reuse it: the site, the token and the default
-method are settled at construction, so each call only names the function it
-wants.
+---
 
-`content` is nested freely and flattened into the `parent[child][index]`
-keys Moodle reads, so the example above goes out as `options[ids][0]=1`,
-`options[ids][1]=2`, `options[ids][2]=3`. `null` and `undefined` are dropped.
+## Three Ways to Call Web Services
 
-### A single call
+`@didactika/moodle-client` offers three calling styles to suit any architecture:
 
-`moodleClient()` is the one-shot form the package shipped with. Same path,
-same behaviour, same errors.
+### 1. Direct Typed Methods (Recommended)
+
+Direct methods use lightweight JavaScript proxies that map property paths directly to web services.
+
+```ts
+// Function without parameters:
+const site = await moodle.webservice.core_webservice_get_site_info();
+
+// Function with typed parameters:
+const courses = await moodle.webservice.core_course_get_courses({
+  options: { ids: [1, 2] },
+});
+
+// Override HTTP method per call (GET / POST):
+const userList = await moodle.webservice.core_user_get_users(
+  { criteria: [{ key: "email", value: "teacher@example.org" }] },
+  "GET"
+);
+```
+
+**Why choose direct methods?**
+- Full IDE autocompletion for function names and parameter keys.
+- JSDoc parameter and return documentation displayed right inside your editor.
+- Return bodies are strongly typed (`data` is typed as `CoreCourseGetCoursesReturns`, not `any`).
+- Zero runtime overhead: powered by dynamic JavaScript Proxies with referential caching.
+
+### 2. Dynamic `.call()` Method
+
+The `.call()` method lets you invoke any web service by its string name. Settle the site, token, and default method once at construction, and call any function dynamically:
+
+```ts
+// Body defaults to 'any'
+const { data } = await moodle.call("core_course_get_courses", {
+  options: { ids: [1, 2, 3] },
+});
+
+// Or pass a generic type argument to type the response:
+interface Course {
+  id: number;
+  fullname: string;
+  shortname: string;
+}
+
+const { data: typedCourses } = await moodle.call<Course[]>(
+  "core_course_get_courses",
+  { options: { ids: [1, 2, 3] } }
+);
+```
+
+**When to use `.call()`?**
+- When the function name is determined dynamically at runtime.
+- When calling custom, third-party, or local plugins where generated schemas have not been generated yet.
+- When you want to manually shape or narrow the generic return type.
+
+### 3. One-Shot `moodleClient()` Helper
+
+If you only need to make a single, isolated call without keeping a client instance around:
 
 ```ts
 import { moodleClient } from "@didactika/moodle-client";
@@ -69,61 +157,351 @@ const response = await moodleClient({
   },
   content: { options: { ids: [1, 2, 3] } },
 });
+
+console.log(response.status, response.data);
 ```
 
-### Typing the response
+`moodleClient()` goes through the exact same network transport and error-handling pipeline.
 
-The body is `any` by default. Pass a type argument to have it checked:
+---
+
+## Parameter Serialization
+
+Moodle's REST server cannot parse raw JSON request bodies. Instead, it expects flattened PHP array keys in `application/x-www-form-urlencoded` format (or query parameters for `GET`).
+
+Both direct methods and `.call()` automatically flatten plain JavaScript objects and arrays:
 
 ```ts
-type Course = { id: number; fullname: string };
-
-const { data } = await moodle.call<Course[]>("core_course_get_courses");
+await moodle.webservice.core_course_get_courses({
+  options: {
+    ids: [1, 2, 3],
+  },
+});
 ```
 
-### Errors
+is serialized over the wire as:
 
-A failed call throws. Each Moodle error code has its own class, so
-`instanceof` is enough to route them:
+```
+options[ids][0]=1&options[ids][1]=2&options[ids][2]=3
+```
+
+- **Arrays of objects** flatten similarly: `criteria: [{ key: "email", value: "user@example.org" }]` becomes `criteria[0][key]=email&criteria[0][value]=user%40example.org`.
+- **`null` and `undefined`** properties are cleanly omitted, matching Moodle expectations.
+- **Booleans and numbers** are converted to string representations (`true` -> `"1"`, `false` -> `"0"`).
+
+---
+
+## Response Structure (`MoodleResponse<T>`)
+
+Every successful call resolves to an instance of `MoodleResponse<T>`:
+
+| Property | Type | Description |
+|---|---|---|
+| `data` | `T` | The parsed JSON response body (or raw string if non-JSON) |
+| `status` | `number` | HTTP status code (e.g., `200`) |
+| `statusText` | `string` | HTTP status text (e.g., `"OK"`) |
+| `ok` | `boolean` | `true` if HTTP status is `2xx` |
+| `headers` | `Headers` | Native `fetch` response headers |
+| `isMoodleError` | `boolean` | `true` if body contains a Moodle `errorcode` |
+
+---
+
+## Examples
+
+### 1. Retrieve Site Information
 
 ```ts
-import { InvalidToken, MoodleException } from "@didactika/moodle-client";
+import { MoodleClient } from "@didactika/moodle-client";
+
+const moodle = new MoodleClient({
+  rootURL: "https://moodle.example.org",
+  token: process.env.MOODLE_TOKEN!,
+});
+
+const { data: site } = await moodle.webservice.core_webservice_get_site_info();
+console.log(`Connected: ${site.sitename} (Moodle ${site.release})`);
+```
+
+### 2. Query Courses with Options
+
+```ts
+const { data: courses } = await moodle.webservice.core_course_get_courses({
+  options: { ids: [10, 20] },
+});
+
+for (const course of courses) {
+  console.log(`Course: ${course.fullname} (ID: ${course.id})`);
+}
+```
+
+### 3. Create a New User
+
+```ts
+const { data: newUsers } = await moodle.webservice.core_user_create_users({
+  users: [
+    {
+      username: "john.doe",
+      email: "john.doe@example.org",
+      firstname: "John",
+      lastname: "Doe",
+      password: "ChangeMe123!",
+      auth: "manual",
+    },
+  ],
+});
+
+console.log("Created user with ID:", newUsers[0]?.id);
+```
+
+### 4. Enrol a User into a Course
+
+```ts
+await moodle.webservice.enrol_manual_enrol_users({
+  enrolments: [
+    {
+      roleid: 5, // Student role
+      userid: newUsers[0].id,
+      courseid: 10,
+    },
+  ],
+});
+
+console.log("User enrolled successfully.");
+```
+
+### 5. Catching Semantic Moodle Errors
+
+```ts
+import {
+  MoodleClient,
+  InvalidToken,
+  AccessException,
+  InvalidParameter,
+  InvalidRecord,
+  MoodleException,
+  URLError,
+} from "@didactika/moodle-client";
+
+const moodle = new MoodleClient({
+  rootURL: "https://moodle.example.org",
+  token: "invalid-or-expired-token",
+});
 
 try {
-  await moodle.call("core_course_get_courses");
+  const { data } = await moodle.webservice.core_course_get_courses();
 } catch (error) {
   if (error instanceof InvalidToken) {
-    // the token is wrong or has expired
+    console.error("Token is invalid or expired. Re-authenticate.");
+  } else if (error instanceof AccessException) {
+    console.error("User lacks capability or function not in external service.");
+  } else if (error instanceof InvalidParameter) {
+    console.error("Invalid parameter supplied:", error.debugInfo);
+  } else if (error instanceof InvalidRecord) {
+    console.error("Requested record was not found in the database.");
+  } else if (error instanceof URLError) {
+    console.error("Failed to reach Moodle server (offline, bad URL, or proxy error).");
   } else if (error instanceof MoodleException) {
-    console.error(error.status, error.message, error.debugInfo);
+    console.error(`Moodle error (${error.status}):`, error.message, error.debugInfo);
+  } else {
+    throw error;
   }
 }
 ```
 
-The full list, and why the status codes come from two different places, is
-in [docs/errors.md](docs/errors.md).
+Check [examples/](examples/) for more runnable scripts.
+
+---
+
+## Semantic Error Handling
+
+Moodle's REST server notoriously returns `HTTP 200 OK` even when a web service fails, returning error details in the JSON body.
+
+`@didactika/moodle-client` automatically inspects every response, parses Moodle error codes, and throws semantic, strongly-typed Error classes:
+
+| Error Class | Thrown When Moodle Reports | HTTP `status` | Description |
+|---|---|---|---|
+| `InvalidToken` | `invalidtoken` | 401 | The token is wrong, expired, or invalid. |
+| `AccessException` | `accessexception` | 403 | Token is valid, but the user lacks permissions or the function is missing from the external service. |
+| `InvalidParameter` | `invalidparameter` | 400 | Missing required parameters or incorrect types sent to the function. |
+| `InvalidRecord` | `invalidrecord` | 404 | The requested database record (course ID, user ID, etc.) does not exist. |
+| `MoodleException` | any other Moodle exception code | site status | General Moodle error; carries `status`, `message`, and `debugInfo`. |
+| `URLError` | network failure, DNS error, site unreachable, or proxy HTML error | 404 | Request failed before reaching Moodle REST endpoint. |
+| `BadRequestError` | any other unclassified error | 400 | Generic bad request response. |
+
+### Debugging with `debugInfo`
+
+When Moodle's debugging mode is set to *DEVELOPER* (*Site administration -> Development -> Debugging*), Moodle attaches stack traces and detailed SQL hints. When available, `@didactika/moodle-client` exposes this under `error.debugInfo`.
+
+Detailed explanation of error handling can be found in [docs/errors.md](docs/errors.md).
+
+---
+
+## Typed Web Services Generation
+
+> [!NOTE]
+> Moodle 4.5 web services are already **bundled out of the box** in the `webservice` namespace (`moodle.webservice.*`).
+> You **do not** need to generate or configure anything to call standard Moodle web services. You only need the CLI tools if you want custom namespaces, schemas for other Moodle versions (e.g. 4.4, 5.0), local plugin directories, or remote Git repositories.
+>
+> `webservice` is part of the library, not of your configuration: it never appears in `package.json`, and it cannot be updated, regenerated or deleted. The name is reserved; an entry using it in `package.json` makes generation fail until it is removed.
+
+### 1. CLI Commands
+
+Four commands manage the schema namespaces. `create`, `update` and `delete` start a wizard when run without options, or run in one line, without prompts, when you pass the values:
+
+| Command | What it does |
+|---|---|
+| `npx moodle-create-schemas` | Adds a namespace to `package.json` and generates it. Rolls back `package.json` if generation fails. |
+| `npx moodle-update-schemas` | Changes a namespace and saves it; then synchronizes (regenerates) only that namespace when you confirm or pass `--sync`, which is recommended. Restores the previous schemas if that fails. |
+| `npx moodle-delete-schemas` | Removes a namespace and its generated files, keeping files you wrote. |
+| `npx moodle-generate-schemas` | Generates every namespace; `--namespace <name>` regenerates just one, `--force` all of them. |
+
+```bash
+npx moodle-create-schemas --namespace myRepo \
+    --source.type moodle-repository --source.url https://git.example.com/org/moodle.git \
+    --source.branch main --outDir src/moodle
+
+npx moodle-update-schemas --namespace myRepo --source.branch release-2 --sync
+npx moodle-generate-schemas --namespace myRepo
+npx moodle-delete-schemas --namespace myRepo
+```
+
+Every option, both modes, rollback and cleanup rules: [CLI Reference](docs/cli.md). For a walkthrough, see the [Web Services Guide](docs/webservices-guide.md).
+
+### 2. Configuration in `package.json`
+
+Configurations are declared under the `"moodle-client"` array in your `package.json`:
+
+```json
+{
+  "name": "my-moodle-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "@didactika/moodle-client": "^2.2.0"
+  },
+  "moodle-client": [
+    {
+      "namespace": "moodle44",
+      "source": {
+        "type": "moodle-official",
+        "version": "4.4"
+      },
+      "webservices": ["*"]
+    },
+    {
+      "namespace": "customRepo",
+      "source": {
+        "type": "moodle-repository",
+        "url": "https://github.com/my-org/moodle.git",
+        "branch": "main"
+      },
+      "webservices": ["*"],
+      "outDir": "src/schemas"
+    },
+    {
+      "namespace": "localDev",
+      "source": {
+        "type": "moodle-local",
+        "path": "~/moodle"
+      },
+      "webservices": ["core_*", "local_*"],
+      "outDir": "src/schemas"
+    }
+  ]
+}
+```
+
+#### Configuration Options
+
+- `namespace` (string, required): Unique namespace identifier used on `MoodleClient` (e.g. `moodle.webservice.*`, `moodle.customRepo.*`, `moodle.localDev.*`). Must be a valid identifier: letters, digits, `_` or `$`, not starting with a digit (`moodle50`, not `moodle5.0`).
+- `source` (object, required). `type` is one of exactly three values:
+  - **Official release**: `{ "type": "moodle-official", "version": "4.5" }`
+  - **Remote Git repository**: `{ "type": "moodle-repository", "url": "https://github.com/my-org/moodle.git", "branch": "main" }`
+  - **Local instance**: `{ "type": "moodle-local", "path": "/path/to/moodle" }`
+
+  The short names used by pre-release builds (`moodle`, `official`, `repository`, `remote`, `git`, `local`) are rejected with an error that names the replacement; `npx moodle-update-schemas --namespace <name> --sync` migrates an old entry.
+- `webservices` (string[], required): Service names or wildcard patterns to include (e.g. `["*"]`, `["core_*"]`, `["mod_quiz_*"]`).
+- `outDir` (string): Output directory path in your project. Required when `source.type` is `"moodle-local"` or `"moodle-repository"`, optional for `"moodle-official"`. Generated files are organized under `[outDir]/{namespace}/`.
+
+### 3. Calling Web Services via Custom Namespaces
+
+Once generated, TypeScript declaration merging automatically attaches each namespace to `MoodleClient`:
+
+```ts
+import { MoodleClient } from "@didactika/moodle-client";
+import type { webservice, customRepo, localDev } from "@didactika/moodle-client";
+
+const moodle = new MoodleClient({
+  rootURL: "https://moodle.example.org",
+  token: process.env.MOODLE_TOKEN!,
+});
+
+// 1. Bundled namespace 'webservice' (part of the library, never in package.json):
+// Directly invokes official Moodle core functions with full IDE autocomplete and parameter validation.
+const { data: site } = await moodle.webservice.core_webservice_get_site_info();
+
+// 2. Custom namespace 'customRepo' (generated from a remote Git repository specified in package.json):
+// Allows calling functions from a specific institutional fork with dedicated, isolated TypeScript types.
+const { data: repoUsers } = await moodle.customRepo.core_user_get_users({
+  criteria: [{ key: "id", value: "1" }],
+});
+
+// 3. Local development namespace 'localDev' (generated from a local plugin source directory):
+// Provides immediate type checking and documentation for custom plugins in progress (e.g. local_myplugin_*).
+const { data: customData } = await moodle.localDev.local_myplugin_get_info();
+```
+
+- **Smart Cache & Governance**: The generator detects existing schemas in `outDir` and synchronizes in milliseconds (~0.2s). Run with `--force` when upstream changes occur.
+- **Selective Cleanup**: When regenerating or deleting an `outDir` namespace, stale generated webservice files are removed while custom user files in the same directory are safely preserved.
+- **Exact PascalCase Naming**: Generated types use unabbreviated Moodle function names (e.g., `core_course_get_courses` produces `CoreCourseGetCoursesParams` and `CoreCourseGetCoursesReturns`).
+- **Frankenstyle File Hierarchy**: Schemas are structured following Moodle's component hierarchy (`core/course/get_courses.webservice.d.ts`).
+
+### Generator Diagnostics & Troubleshooting
+
+The generator emits clear, actionable error blocks:
+
+| Error Code | Title | Cause & Recommended Action |
+|---|---|---|
+| `ERR_CONFIG_INVALID_JSON` | Invalid Configuration File | `package.json` contains malformed JSON syntax. Fix syntax errors. |
+| `ERR_CONFIG_DUPLICATE_NAMESPACE` | Duplicate Namespace | Two entries share the same `namespace`. Use unique namespace names. |
+| `ERR_CONFIG_MISSING_OUTDIR_LOCAL` | Missing outDir in Local Mode | When using `source.type: "moodle-local"`, `outDir` is required. |
+| `ERR_CONFIG_MISSING_OUTDIR_REPOSITORY` | Missing outDir in Repository Mode | When using `source.type: "moodle-repository"`, `outDir` is required. |
+| `ERR_CONFIG_MISSING_REPOSITORY_URL` | Missing Repository URL | When using `source.type: "moodle-repository"`, `source.url` is required. |
+| `ERR_CONFIG_INVALID_SOURCE_TYPE` | Invalid Source Type | `source.type` is not `moodle-official`, `moodle-repository` or `moodle-local`. The message names the replacement of old values. |
+| `ERR_CONFIG_RESERVED_NAMESPACE` | Reserved Namespace | `package.json` declares `webservice`, the bundled namespace. Remove that entry (`npx moodle-delete-schemas --namespace webservice`); its types stay available. |
+| `ERR_CONFIG_INVALID_NAMESPACE` | Invalid Configuration Namespace | The namespace is not a valid identifier (e.g. `moodle5.0`). Rename it (e.g. `moodle50`). |
+| `ERR_CLI_UNKNOWN_OPTION` / `ERR_CLI_MISSING_OPTION` / `ERR_CLI_INVALID_OPTION` | CLI option errors | A mistyped option, a missing required option, or an invalid value. Run the command with `--help`. |
+| `ERR_NAMESPACE_NOT_FOUND` | Namespace Not Found | `--namespace` names a namespace that is not configured. The message lists the configured ones. |
+| `ERR_SYNC_FAILED` | Schema Synchronization Failed | `moodle-update-schemas` saved the configuration but regeneration failed; the previous schemas were restored. Fix the cause and run `npx moodle-generate-schemas --namespace <name>`. |
+| `ERR_MOODLE_VERSION_UNSUPPORTED` | Unsupported Moodle Version | Configured Moodle version is lower than 2.0. Set `"version"` to a supported version (e.g. `"4.5"`). |
+| `ERR_PHP_NOT_FOUND` | PHP CLI Not Found | `php` binary was not found in system `PATH`. Install PHP 8.0 or higher. |
+| `ERR_MOODLE_PATH_NOT_ROOT` | Invalid Moodle Root Directory | The directory specified in `source.path` has no `version.php`. Point directly to the Moodle installation root. |
+| `ERR_NO_SERVICES_FOUND` | No Web Services Found | The codebase contains no `db/services.php` files. Verify that the Moodle installation is complete. |
+| `ERR_SERVICE_NOT_FOUND` | Web Service Not Found | A pattern in `webservices` array did not match any declared web service. |
+
+---
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md) — install, what to enable on
-  the Moodle side, and the first call.
-- [API reference](docs/api-reference.md) — every class, method and type.
-- [Errors](docs/errors.md) — what gets thrown, and how to tell the cases
-  apart.
-- [Examples](examples) — runnable scripts for the usual shapes.
+- [Getting Started](docs/getting-started.md) — Step-by-step setup on Moodle side, installation, and first call.
+- [API Reference](docs/api-reference.md) — Comprehensive documentation of classes, methods, and TypeScript interfaces.
+- [Error Handling](docs/errors.md) — Deep dive into Moodle error codes, HTTP statuses, and debugging strategies.
+- [Examples](examples/) — Runnable scripts demonstrating common usage patterns.
 
-## Migrating from 1.x
+---
 
-`response.data` is unchanged. See the [CHANGELOG](CHANGELOG.md) for the full
-list, including the deep imports that were replaced by named exports from the
-package root.
+## Migrating from 1.x / `moodle-web-service-client`
+
+- `response.data` structure remains unchanged.
+- Deep imports (e.g. `dist/errors/...`) have been replaced by clean named exports directly from `@didactika/moodle-client`.
+- Direct typed methods (`client.webservice.*`) are now the recommended way to call web services, replacing manual `call<T>()` castings.
+
+See [CHANGELOG.md](CHANGELOG.md) for full version history.
+
+---
 
 ## Contributing
 
-Bug reports and feature requests both go to
-[the issue tracker](https://github.com/didactika/moodle-client/issues). The
-org's [contributing guide](https://github.com/didactika/.github/blob/main/CONTRIBUTING.md)
-covers the rest.
+Bug reports and feature requests are welcome on the [issue tracker](https://github.com/didactika/moodle-client/issues).
 
 ```console
 npm install
@@ -131,14 +509,24 @@ npm test
 npm run test:coverage
 ```
 
-Unit tests live in `tests/unit`. Integration tests in `tests/integration` run
-against a throwaway local HTTP server, so they need no Moodle install.
+To update the bundled `webservice` namespace to another Moodle release, change `BUNDLED_MOODLE_VERSION` in `src/generator/interfaces/config.interfaces.ts`, then run:
+
+```console
+npm run schemas:bundle                            # downloads that release and regenerates src/schemas
+npm run schemas:bundle -- --moodle-path ~/moodle  # or use a local checkout of it
+```
+
+The script lives in `scripts/` and is not published with the package.
+
+---
 
 ## Contributors
 
 Thanks to everyone who has contributed to this project:
 
 [![Contributors](https://contrib.rocks/image?repo=didactika/moodle-client)](https://github.com/didactika/moodle-client/graphs/contributors)
+
+---
 
 ## License
 
