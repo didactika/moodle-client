@@ -14,6 +14,74 @@ not reconstructed from memory.
 
 ## [Unreleased]
 
+Typed methods per web service, and a CLI to generate them from any Moodle
+codebase. Nothing here breaks 2.1.0: code written for it compiles and runs
+unchanged, and `call()` and `moodleClient()` go through the same path.
+
+### Added
+
+- **Typed methods through namespaces.** `MoodleClient` exposes every web service
+  as a method of a namespace, with typed parameters and response:
+
+  ```ts
+  const { data: courses } = await moodle.webservice.core_course_get_courses({
+    options: { ids: [1, 2, 3] },
+  });
+  ```
+
+  The `webservice` namespace is bundled: the 700+ functions of Moodle 4.5 work out
+  of the box, with nothing to generate. Shipped types include complete declaration
+  barrels (`dist/schemas/index.d.ts`) that compile cleanly even in projects with
+  `skipLibCheck: false`. It is part of the library, not of your configuration:
+  it never appears in `package.json`, and the CLIs cannot update, regenerate or delete it.
+- **Schema generator CLI** for other Moodle versions, forks and local plugins.
+  Each namespace is declared under `"moodle-client"` in `package.json`, from one
+  of three sources:
+  - `moodle-official`: a release, by version;
+  - `moodle-repository`: a Git repository and branch, with non-interactive authentication;
+  - `moodle-local`: a directory. Its path is strictly ephemeral and never saved in
+    `package.json`. Includes automatic candidate discovery in workspace and sibling
+    folders, support for both root `version.php` and `public/version.php`, platform-specific
+    path examples, and cross-platform tilde expansion (`~`, `~/`, `~\`).
+
+  | Command | |
+  | --- | --- |
+  | `moodle-create-schemas` | adds a namespace and generates only that one |
+  | `moodle-update-schemas` | changes a namespace, then synchronizes it (`--sync`) |
+  | `moodle-delete-schemas` | removes a namespace and its generated files |
+  | `moodle-generate-schemas` | generates every namespace, or targeted ones with `--namespace` |
+
+  - **Two modes.** `create`, `update` and `delete` ask for each value as a wizard,
+    or run in one line, for scripts and CI, with options named after the config
+    keys (`--namespace`, `--source.type`, `--source.url`, `--webservices`,
+    `--outDir`…).
+  - **Targeting and isolated execution.** `moodle-generate-schemas --namespace <name>`
+    processes only the specified namespace(s), leaving other configured entries untouched.
+    Adding `-f` / `--force` (`--force --namespace <name>`) forces re-extraction from
+    scratch for that namespace alone.
+  - **Rollback and cleanup safety.** A failed creation restores `package.json`; a failed
+    synchronization restores previous schemas. Regenerating or deleting only touches files
+    the generator wrote.
+
+  The generator needs PHP 8.0+ on the `PATH`. Calling Moodle does not.
+- **Diagnostics.** Generator failures print a title, the details and the action to
+  take, with a stable code (`ERR_PHP_NOT_FOUND`, `ERR_CONFIG_INVALID_SOURCE_TYPE`,
+  `ERR_NAMESPACE_NOT_FOUND`…).
+- **Documentation:** [docs/cli.md](docs/cli.md) for every command and option, a web
+  services guide, and the generator errors in [docs/errors.md](docs/errors.md).
+
+### Changed
+
+- **Runtime dependencies.** The package now has runtime dependencies, which the
+  generator needs: `@didactika/moodle-client-schemas`, `p-limit`, `simple-git` and
+  `tar`. They are not loaded when you only make calls.
+
+### Fixed
+
+- **Debug information in error handling.** `BadRequestError` now receives Moodle's
+  `debuginfo` when present, and error messages across all error classes append it
+  to provide immediate context in logs and stack traces.
+
 ## [2.1.0] - 2026-08-11
 
 Nothing here breaks 2.0.0: `moodleClient()` keeps the same signature and
